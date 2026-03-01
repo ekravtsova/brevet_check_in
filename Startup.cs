@@ -8,7 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Pomelo.EntityFrameworkCore.MySql.Infrastructure;
 using System;
-using brevet_tracker.Data;
+using brevet_tracker.Server.Data;
 
 namespace brevet_tracker
 {
@@ -36,7 +36,7 @@ namespace brevet_tracker
             }
             var mariaDbServerVersion = new MariaDbServerVersion(new Version(mariaDbServerVersionValue));
 
-            services.AddDbContext<AppDbContext>(options =>
+            services.AddDbContext<ApplicationDbContext>(options =>
                 options.UseMySql(mariaDbConnectionString, mariaDbServerVersion));
 
             services.AddControllersWithViews();

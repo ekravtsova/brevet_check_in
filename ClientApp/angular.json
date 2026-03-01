@@ -54,7 +54,8 @@
         "serve": {
           "builder": "@angular-devkit/build-angular:dev-server",
           "options": {
-            "buildTarget": "brevet_tracker:build"
+            "buildTarget": "brevet_tracker:build",
+            "proxyConfig": "proxy.conf.json"
           },
           "configurations": {
             "production": {
