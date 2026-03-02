@@ -1,14 +1,18 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.AspNetCore.SpaServices.AngularCli;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Pomelo.EntityFrameworkCore.MySql.Infrastructure;
+using Microsoft.Extensions.Logging;
 using System;
+using System.Threading.Tasks;
 using brevet_tracker.Server.Data;
+using brevet_tracker.Server.Models.Auth;
 
 namespace brevet_tracker
 {
@@ -24,20 +28,42 @@ namespace brevet_tracker
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
-            var mariaDbConnectionString = Configuration.GetConnectionString("MariaDb");
-            if (string.IsNullOrWhiteSpace(mariaDbConnectionString))
+            var connectionString = Configuration.GetConnectionString("DefaultConnection");
+            if (string.IsNullOrWhiteSpace(connectionString))
             {
-                throw new InvalidOperationException("ConnectionStrings:MariaDb is not configured.");
+                throw new InvalidOperationException("ConnectionStrings:DefaultConnection is not configured.");
             }
-            var mariaDbServerVersionValue = Configuration["MariaDb:ServerVersion"];
-            if (string.IsNullOrWhiteSpace(mariaDbServerVersionValue))
-            {
-                throw new InvalidOperationException("MariaDb:ServerVersion is not configured.");
-            }
-            var mariaDbServerVersion = new MariaDbServerVersion(new Version(mariaDbServerVersionValue));
 
             services.AddDbContext<ApplicationDbContext>(options =>
-                options.UseMySql(mariaDbConnectionString, mariaDbServerVersion));
+                options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
+
+            services.AddIdentity<ApplicationUser, IdentityRole>(options =>
+                {
+                    options.Password.RequiredLength = 6;
+                    options.Password.RequireDigit = true;
+                    options.Password.RequireLowercase = true;
+                    options.Password.RequireUppercase = false;
+                    options.Password.RequireNonAlphanumeric = false;
+                })
+                .AddEntityFrameworkStores<ApplicationDbContext>()
+                .AddDefaultTokenProviders();
+
+            services.ConfigureApplicationCookie(options =>
+            {
+                options.Cookie.HttpOnly = true;
+                options.Cookie.SameSite = SameSiteMode.Lax;
+                options.SlidingExpiration = true;
+                options.Events.OnRedirectToLogin = context =>
+                {
+                    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                    return Task.CompletedTask;
+                };
+                options.Events.OnRedirectToAccessDenied = context =>
+                {
+                    context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                    return Task.CompletedTask;
+                };
+            });
 
             services.AddControllersWithViews();
             // In production, the Angular files will be served from this directory
@@ -50,6 +76,22 @@ namespace brevet_tracker
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
+            using (var scope = app.ApplicationServices.CreateScope())
+            {
+                var services = scope.ServiceProvider;
+                var logger = services.GetRequiredService<ILogger<Startup>>();
+                try
+                {
+                    var dbContext = services.GetRequiredService<ApplicationDbContext>();
+                    dbContext.Database.Migrate();
+                    SeedData.SeedAsync(services).GetAwaiter().GetResult();
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "An error occurred while applying migrations and seeding data.");
+                }
+            }
+
             if (env.IsDevelopment())
             {
                 app.UseDeveloperExceptionPage();
@@ -73,6 +115,8 @@ namespace brevet_tracker
             }
 
             app.UseRouting();
+            app.UseAuthentication();
+            app.UseAuthorization();
 
             app.UseEndpoints(endpoints =>
             {
