@@ -13,6 +13,7 @@ using System;
 using System.Threading.Tasks;
 using brevet_tracker.Server.Data;
 using brevet_tracker.Server.Models.Auth;
+using brevet_tracker.Server.Services.Auth;
 
 namespace brevet_tracker
 {
@@ -65,7 +66,10 @@ namespace brevet_tracker
                 };
             });
 
+            services.AddScoped<ITokenService, TokenService>();
+            services.AddScoped<IUserRefreshTokenService, UserRefreshTokenService>();
             services.AddControllersWithViews();
+            services.AddSwaggerGen();
             // In production, the Angular files will be served from this directory
             services.AddSpaStaticFiles(configuration =>
             {
@@ -113,6 +117,13 @@ namespace brevet_tracker
             {
                 app.UseSpaStaticFiles();
             }
+
+            app.UseSwagger();
+            app.UseSwaggerUI(options =>
+            {
+                options.SwaggerEndpoint("/swagger/v1/swagger.json", "Brevet Tracker API v1");
+                options.RoutePrefix = "swagger";
+            });
 
             app.UseRouting();
             app.UseAuthentication();

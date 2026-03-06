@@ -11,6 +11,9 @@ namespace brevet_tracker.Server.Models.Auth
     {
         public string? DisplayName { get; set; }
         public DateTime? RegisteredAt { get; set; }
+        public string? RefreshToken { get; set; }
+        public DateTime? RefreshTokenExpiryTime { get; set; }
+        public DateTime? LastTokenRequestTime { get; set; }
 
         public ICollection<UserMark> Marks { get; set; } = new List<UserMark>();
     }
