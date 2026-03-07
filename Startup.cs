@@ -68,6 +68,7 @@ namespace brevet_tracker
 
             services.AddScoped<ITokenService, TokenService>();
             services.AddScoped<IUserRefreshTokenService, UserRefreshTokenService>();
+            services.AddScoped<IRoleService, RoleService>();
             services.AddControllersWithViews();
             services.AddSwaggerGen();
             // In production, the Angular files will be served from this directory
@@ -88,6 +89,7 @@ namespace brevet_tracker
                 {
                     var dbContext = services.GetRequiredService<ApplicationDbContext>();
                     dbContext.Database.Migrate();
+                    RoleSeedData.SeedAsync(services).GetAwaiter().GetResult();
                     SeedData.SeedAsync(services).GetAwaiter().GetResult();
                 }
                 catch (Exception ex)

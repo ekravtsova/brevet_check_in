@@ -3,6 +3,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using brevet_tracker.Server.Constants;
 using brevet_tracker.Server.DTOs.Auth;
 using brevet_tracker.Server.Models.Auth;
 using brevet_tracker.Server.Models.Settings;
@@ -26,6 +27,7 @@ namespace brevet_tracker.Server.Controllers
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly ITokenService _tokenService;
         private readonly IUserRefreshTokenService _userRefreshTokenService;
+        private readonly IRoleService _roleService;
         private readonly SignInManager<ApplicationUser> _signInManager;
         private readonly ILogger<AuthController> _logger;
         private readonly JwtSettings _jwtSettings;
@@ -34,6 +36,7 @@ namespace brevet_tracker.Server.Controllers
             UserManager<ApplicationUser> userManager,
             ITokenService tokenService,
             IUserRefreshTokenService userRefreshTokenService,
+            IRoleService roleService,
             SignInManager<ApplicationUser> signInManager,
             ILogger<AuthController> logger,
             IConfiguration configuration)
@@ -41,6 +44,7 @@ namespace brevet_tracker.Server.Controllers
             _userManager = userManager ?? throw new ArgumentNullException(nameof(userManager));
             _tokenService = tokenService ?? throw new ArgumentNullException(nameof(tokenService));
             _userRefreshTokenService = userRefreshTokenService ?? throw new ArgumentNullException(nameof(userRefreshTokenService));
+            _roleService = roleService ?? throw new ArgumentNullException(nameof(roleService));
             _signInManager = signInManager ?? throw new ArgumentNullException(nameof(signInManager));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             if (configuration == null)
@@ -97,11 +101,32 @@ namespace brevet_tracker.Server.Controllers
         [Consumes("application/json")]
         [ProducesResponseType(typeof(TokenResponseDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
         public async Task<ActionResult<TokenResponseDto>> Register([FromBody] RegisterRequestDto request)
         {
             if (!ModelState.IsValid)
             {
                 return BadRequest(ModelState);
+            }
+
+            var requestedRole = string.IsNullOrWhiteSpace(request.Role)
+                ? RoleNames.Participant
+                : request.Role.Trim();
+
+            if (!string.Equals(requestedRole, RoleNames.Admin, StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(requestedRole, RoleNames.Participant, StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest("Role must be either 'Admin' or 'Participant'.");
+            }
+
+            var roleToAssign = string.Equals(requestedRole, RoleNames.Admin, StringComparison.OrdinalIgnoreCase)
+                ? RoleNames.Admin
+                : RoleNames.Participant;
+
+            var requesterIsAdmin = User.Identity?.IsAuthenticated == true && User.IsInRole(RoleNames.Admin);
+            if (string.Equals(roleToAssign, RoleNames.Admin, StringComparison.Ordinal) && !requesterIsAdmin)
+            {
+                return BadRequest("Only administrators can register users with the 'Admin' role.");
             }
 
             var existingUser = await _userManager.FindByEmailAsync(request.Email);
@@ -123,6 +148,14 @@ namespace brevet_tracker.Server.Controllers
             {
                 var errors = createResult.Errors.Select(e => e.Description).ToArray();
                 return BadRequest(new { Errors = errors });
+            }
+
+            var roleAssigned = await _roleService.AssignRoleToUserAsync(user.Id, roleToAssign);
+            if (!roleAssigned)
+            {
+                _logger.LogError("Failed to assign role '{RoleName}' to newly registered user {UserId}.", roleToAssign, user.Id);
+                await _userManager.DeleteAsync(user);
+                return BadRequest("User was created but role assignment failed. Please try again.");
             }
 
             var tokenResponse = await CreateAndStoreTokensAsync(user);
@@ -192,6 +225,7 @@ namespace brevet_tracker.Server.Controllers
         /// </summary>
         /// <returns>No content when logout succeeds.</returns>
         [HttpPost("logout")]
+        [Authorize]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]

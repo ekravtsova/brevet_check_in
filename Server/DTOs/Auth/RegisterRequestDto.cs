@@ -22,5 +22,12 @@ namespace brevet_tracker.Server.DTOs.Auth
         /// </summary>
         [StringLength(100)]
         public string? DisplayName { get; set; }
+
+        /// <summary>
+        /// Gets or sets the optional role requested during registration.
+        /// Defaults to Participant when omitted.
+        /// </summary>
+        [RegularExpression("^(Admin|Participant)$", ErrorMessage = "Role must be either 'Admin' or 'Participant'.")]
+        public string? Role { get; set; }
     }
 }

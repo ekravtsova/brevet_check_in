@@ -6,6 +6,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 using System;
 using System.Text;
+using brevet_tracker.Server.Constants;
 using brevet_tracker.Server.Models.Settings;
 
 namespace brevet_tracker
@@ -50,7 +51,17 @@ namespace brevet_tracker
                                 };
                             });
 
-                        services.AddAuthorization();
+                        services.AddAuthorization(options =>
+                        {
+                            options.AddPolicy("AdminOnly", policy =>
+                                policy.RequireRole(RoleNames.Admin));
+
+                            options.AddPolicy("ParticipantOrAdmin", policy =>
+                                policy.RequireRole(RoleNames.Participant, RoleNames.Admin));
+
+                            options.AddPolicy("CanManageBrevets", policy =>
+                                policy.RequireRole(RoleNames.Admin));
+                        });
                     });
 
                     webBuilder.UseStartup<Startup>();
